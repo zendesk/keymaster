@@ -1,6 +1,10 @@
+// SHA: 918c92fa6f4d8cf7e
+
 //     keymaster.js
 //     (c) 2011 Thomas Fuchs
 //     keymaster.js may be freely distributed under the MIT license.
+//     This is a fork of the original library. You can find it at
+//     https://github.com/jamesarosen/keymaster/ignoreEvent/keymaster.js
 
 ;(function(global){
   var k,
@@ -41,8 +45,7 @@
 
   // handle keydown event
   function dispatch(event){
-    var key, tagName, handler, k, i, modifiersMatch;
-    tagName = (event.target || event.srcElement).tagName;
+    var key, handler, k, i, modifiersMatch;
     key = event.keyCode;
 
     // if a modifier key, set the key.<modifierkeyname> property to true and return
@@ -54,8 +57,12 @@
       return;
     }
 
-    // ignore keypressed in any elements that support keyboard data input
-    if (tagName == 'INPUT' || tagName == 'SELECT' || tagName == 'TEXTAREA') return;
+    // if the ALT key is pressed make sure the we set the ALT modifiers correctly
+    if (event.altKey) {
+      setAltModifier();
+    }
+
+    if (global.key.ignoreEvent(event)) { return; }
 
     // abort if no potentially matching shortcuts found
     if (!(key in _handlers)) return;
@@ -84,6 +91,21 @@
 	}
   };
 
+  function updateAltModifier(value) {
+    _mods[18] = value;
+    assignKey['⌥'] = value;
+    assignKey.alt = value;
+    assignKey.option = value;
+  }
+
+  function setAltModifier() {
+    updateAltModifier(true);
+  }
+
+  function unsetAltModifier() {
+    updateAltModifier(false);
+  }
+
   // unset modifier keys on keyup
   function clearModifier(event){
     var key = event.keyCode, k;
@@ -92,7 +114,19 @@
       _mods[key] = false;
       for(k in _MODIFIERS) if(_MODIFIERS[k] == key) assignKey[k] = false;
     }
+    // If ALT modifier is set, unset it. We do so because on keyup we do not
+    // know when ALT was actually depressed. If the ALT key is actually still
+    // pressed the ALT modifiers will be set correctly when handling the keydown
+    // event from the dispatch function by checking the event.altKey modifier.
+    if (_mods[18]) {
+      unsetAltModifier();
+    }
   };
+
+  function resetModifiers() {
+    for(k in _mods) _mods[k] = false;
+    for(k in _MODIFIERS) assignKey[k] = false;
+  }
 
   // parse and assign shortcut
   function assignKey(key, scope, method){
@@ -126,11 +160,18 @@
     }
   };
 
+  // ignore keypressed in any elements that support keyboard data input
+  function defaultIgnoreEvent(event) {
+    var tagName = (event.target || event.srcElement).tagName;
+    return tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA';
+  };
+
   // initialize key.<modifier> to false
   for(k in _MODIFIERS) assignKey[k] = false;
 
   // set current scope (default 'all')
   function setScope(scope){ _scope = scope || 'all' };
+  function getScope(){ return _scope || 'all' };
 
   // cross-browser events
   function addEvent(object, event, method) {
@@ -144,9 +185,14 @@
   addEvent(document, 'keydown', dispatch);
   addEvent(document, 'keyup', clearModifier);
 
+  // reset modifiers to false whenever the window is (re)focused.
+  addEvent(window, 'focus', resetModifiers);
+
   // set window.key and window.key.setScope
   global.key = assignKey;
   global.key.setScope = setScope;
+  global.key.getScope = getScope;
+  global.key.ignoreEvent = defaultIgnoreEvent;
 
   if(typeof module !== 'undefined') module.exports = key;
 
